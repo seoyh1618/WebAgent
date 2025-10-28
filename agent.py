@@ -1,14 +1,16 @@
 # WebAgent/agent.py
-
 from google.adk.agents import Agent 
 from google.adk.tools.agent_tool import AgentTool
 from google.adk.models.lite_llm import LiteLlm
 from WebAgent.confing import constants
 from WebAgent.prompt import ORCHESTRATOR_DESCRIPTION, ORCHESTRATOR_INSTRUCTION
+from dotenv import load_dotenv
 import json
 import logging
 
+
 logger = logging.getLogger(__name__)
+load_dotenv()
 
 # WebPilot Agent Wrapper Tool
 class WebPilotAgentTool(AgentTool):
