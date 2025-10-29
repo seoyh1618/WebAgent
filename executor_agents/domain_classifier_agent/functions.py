@@ -5,15 +5,13 @@ from urllib.parse import urlparse
 
 from openai import OpenAI
 from dotenv import load_dotenv
-from .prompt import (
+from WebAgent.executor_agents.domain_classifier_agent.prompt import (
     QUERY_OPTIMIZATION_SYSTEM_PROMPT,
     QUERY_OPTIMIZATION_USER_PROMPT
 )
-from .state import (
+from WebAgent.executor_agents.domain_classifier_agent.state import (
     DomainClassifierState,
     DomainCandidate,
-    ScoredDomain,
-    DomainClassificationResult
 )
 
 # OpenAI Client 초기화
@@ -103,50 +101,6 @@ class GoogleSearchAPI:
         
         return sorted(list(domains))
     
-    def get_domain_list(self, query: str, num_results: int = 10) -> List[str]:
-        """
-        검색 쿼리에 대한 도메인 리스트 반환 (메인 메서드)
-        
-        Args:
-            query: 검색 쿼리
-            num_results: 검색할 결과 수
-            
-        Returns:
-            도메인 리스트
-        """
-        print(f"검색 쿼리: '{query}'")
-        print(f"검색 결과 수: {num_results}")
-        
-        # 검색 실행
-        search_results = self.search(query, num_results)
-        
-        # 도메인 추출
-        domains = self.extract_domains(search_results)
-        
-        print(f"추출된 도메인 수: {len(domains)}")
-        return domains
-    
-    def get_detailed_results(self, query: str, num_results: int = 10) -> Dict:
-        """
-        검색 결과와 도메인 정보를 함께 반환
-        
-        Args:
-            query: 검색 쿼리
-            num_results: 검색할 결과 수
-            
-        Returns:
-            검색 결과와 도메인 정보가 포함된 딕셔너리
-        """
-        search_results = self.search(query, num_results)
-        domains = self.extract_domains(search_results)
-        
-        return {
-            'query': query,
-            'total_results': search_results.get('searchInformation', {}).get('totalResults', '0'),
-            'domains': domains,
-            'domain_count': len(domains),
-            'search_results': search_results
-        }
 
 # 사용자 쿼리를 검색 최적화 쿼리로 변환하는 함수
 def enhance_query(user_query: str) -> Dict:
@@ -179,11 +133,6 @@ def enhance_query(user_query: str) -> Dict:
     """
     
     try:
-        from .prompt import (
-            QUERY_OPTIMIZATION_SYSTEM_PROMPT,
-            QUERY_OPTIMIZATION_USER_PROMPT
-        )
-        
         # Prompt 구성
         system_content = QUERY_OPTIMIZATION_SYSTEM_PROMPT
         user_content = QUERY_OPTIMIZATION_USER_PROMPT.format(user_query=user_query)
@@ -271,22 +220,40 @@ def execute_google_search(state: DomainClassifierState) -> DomainClassifierState
     
     return state
 
+# 외부 툴 인터페이스용 래퍼 함수 (프롬프트 시그니처와 정렬)
+def execute_google_search_tool(query: str) -> Dict:
+    """
+    프롬프트에서 요구하는 형태로 검색을 수행하는 래퍼.
 
-# 테스트 실행 
-if __name__ == "__main__":
-    search_query = "중앙 대학교 입학조건 알고싶어요."
-    num_results = 10
-    result = enhance_query(search_query)
-    print(result)
-    
-    #search_api = GoogleSearchAPI()
-    #search_results = search_api.search(search_query, num_results=num_results)
-    
-    #for i, item in enumerate(search_results['items'][:10], 1):
-    #    title = item.get('title', 'No title')
-    #    link = item.get('link', 'No URL')
-    #    snippet = item.get('snippet', 'No snippet')
-    #    print(f"  {i}. {title}")
-    #    print(f"     URL: {link}")
-    #    print(f"     요약: {snippet}")
+    Args:
+        query: 최적화된 검색 쿼리 문자열
 
+    Returns:
+        dict: 후보 리스트 직렬화 결과
+            {
+              "candidates": [
+                {
+                  "url": str,
+                  "title": str,
+                  "snippet": str,
+                  "search_rank": int,
+                  "main_domain": str
+                }, ...
+              ]
+            }
+    """
+    state = DomainClassifierState(optimized_query=query)
+    result_state = execute_google_search(state)
+
+    serialized_candidates = [
+        {
+            "url": c.url,
+            "title": c.title,
+            "snippet": c.snippet,
+            "search_rank": c.search_rank,
+            "main_domain": c.main_domain,
+        }
+        for c in result_state.domain_candidates
+    ]
+
+    return {"candidates": serialized_candidates}
